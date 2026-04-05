@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800;1,300;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base Styles */
+body {
+  margin: 0;
+  font-family: 'Open Sans', sans-serif;
+  background-color: theme('colors.background');
+  color: theme('colors.text.main');
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 600;
+  color: theme('colors.text.heading');
+}
+
+/* Utilities */
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Custom Interactive Utilities */
+.hover-scale {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-scale:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1) !important;
+  z-index: 10;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Helper classes for delays since Tailwind doesn't have them by default without plugin */
+.delay-100 {
+  animation-delay: 100ms;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+.delay-300 {
+  animation-delay: 300ms;
+}
+
+.delay-500 {
+  animation-delay: 500ms;
+}
+
+/* Inspinia Specific overrides if needed */
+.btn {
+  @apply inline-flex items-center justify-center px-3 py-1.5 font-semibold rounded-[3px] transition-all duration-200 cursor-pointer border gap-2 text-[13px];
+}
+
+.input {
+  @apply w-full px-3 py-1.5 bg-white border border-border rounded-[1px] text-[13px] text-text-main transition-colors focus:outline-none focus:border-primary focus:ring-0;
+}
+
+/* Page Transition Animation */
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: pageEnter 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
