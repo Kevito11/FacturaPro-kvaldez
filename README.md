@@ -16,3 +16,7 @@
 *   **Backend**: Node.js, Express.
 *   **Base de Datos**: Microsoft SQL Server (MSSQL).
 *   **Iconografía**: Lucide React.
+
+---
+> [!NOTE]
+> Este es un proyecto de **uso personal** desarrollado para optimizar la gestión administrativa propia.
