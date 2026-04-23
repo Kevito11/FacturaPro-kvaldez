@@ -1,3 +1,5 @@
+export const TYPES_RESOURCES = true;
+
 export interface Client {
     id: string;
     name: string;
@@ -6,9 +8,24 @@ export interface Client {
     address: string;
     city?: string;
     contactPerson?: string;
-    creditLimit?: number;
     taxId: string; // RNC or Cédula
+    hasCreditEnabled?: boolean;
+    creditLimit?: number;
+    taxCondition?: string; // e.g., E31, E32, etc.
+    creditBalance?: number; // Saldo a favor del cliente
     createdAt: string;
+}
+
+export interface Payment {
+    id: string;
+    clientId: string;
+    clientName: string;
+    amount: number;
+    date: string;
+    method: 'cash' | 'transfer' | 'check' | 'card';
+    reference?: string;
+    notes?: string;
+    invoiceIds?: string[]; // Facturas que este pago está liquidando
 }
 
 export interface Product {
@@ -44,15 +61,28 @@ export interface Invoice {
     tax: number; // ITBIS etc.
     total: number;
     date: string;
-    status: 'paid' | 'pending' | 'cancelled';
+    status: 'paid' | 'pending' | 'cancelled' | 'invoiced' | 'delivered' | 'returned_partial' | 'returned_total';
     notes?: string;
+    parentId?: string;
+    rootId?: string;
+}
+
+export type AppRole = 'admin' | 'vendedor' | 'contable' | 'almacen' | 'configurador';
+
+export interface User {
+    id: string;
+    username: string;
+    fullName?: string;
+    role: AppRole;
+    permissions: string[]; // e.g. ['clients_view', 'invoices_create']
+    createdAt: string;
 }
 
 export interface AuditLog {
     id: string;
     action: 'create' | 'update' | 'delete' | 'login' | 'print';
-    entity: 'client' | 'product' | 'invoice' | 'system';
+    entity: 'client' | 'product' | 'invoice' | 'system' | 'user';
     details: string;
     timestamp: string;
-    user: string; // "Admin" for now
+    user: string;
 }

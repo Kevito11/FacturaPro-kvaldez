@@ -7,6 +7,9 @@ import Clients from './pages/Clients';
 import Products from './pages/Products';
 import Invoices from './pages/Invoices';
 import CreateInvoice from './pages/CreateInvoice';
+import UsersPage from './pages/Users';
+import Reports from './pages/Reports';
+import Payments from './pages/Payments';
 import Login from './pages/Login';
 import './App.css';
 
@@ -15,6 +18,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
+};
+
+// Componente Protector por Rol
+const RoleRoute = ({ children, permission }: { children: React.ReactNode, permission: string }) => {
+    const { can } = useAuth();
+    if (!can(permission)) return <Navigate to="/" replace />;
+    return <>{children}</>;
 };
 
 function App() {
@@ -35,6 +45,17 @@ function App() {
               <Route path="products" element={<Products />} />
               <Route path="invoices" element={<Invoices />} />
               <Route path="invoices/new" element={<CreateInvoice />} />
+              <Route path="users" element={
+                <RoleRoute permission="users_manage">
+                  <UsersPage />
+                </RoleRoute>
+              } />
+              <Route path="reports" element={
+                <RoleRoute permission="reports_view">
+                  <Reports />
+                </RoleRoute>
+              } />
+              <Route path="payments" element={<Payments />} />
             </Route>
             
           </Routes>
@@ -43,5 +64,6 @@ function App() {
     </AuthProvider>
   );
 }
+
 
 export default App;

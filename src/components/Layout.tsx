@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Package, FileText, Menu, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, Users, Package, FileText, Menu, ArrowRight, ShieldCheck, BarChart3, CreditCard as CreditCardIcon } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,7 +8,7 @@ const Layout: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const location = useLocation();
     const { isLoading, error } = useStore();
-    const { user, logout } = useAuth();
+    const { user, logout, can } = useAuth();
 
     return (
         <div className="flex h-screen bg-[#f3f3f4] text-[#676a6c] overflow-hidden font-sans">
@@ -30,11 +30,11 @@ const Layout: React.FC = () => {
             >
                 {/* Profile / Header Area - Distinctive Style */}
                 <div className="p-6 bg-[#212c38] flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 mb-3 grayscale-[30%]">
-                        <img src={`https://ui-avatars.com/api/?name=${user?.username || 'User'}&background=1ab394&color=fff&size=80`} alt="Profile" className="w-full h-full object-cover" />
+                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 mb-3 grayscale-[30%] shadow-lg">
+                        <img src={`https://ui-avatars.com/api/?name=${user?.fullName || user?.username || 'User'}&background=1ab394&color=fff&size=80`} alt="Profile" className="w-full h-full object-cover" />
                     </div>
-                    <div className="relative group cursor-pointer text-white font-semibold block w-full px-2 truncate capitalize">
-                        {user?.username || 'Usuario'}
+                    <div className="relative group cursor-pointer text-white font-bold block w-full px-2 truncate capitalize text-sm">
+                        {user?.fullName || user?.username || 'Usuario'}
                     </div>
                     <div className="text-xs text-[#8095a8] mt-1 capitalize">{user?.role || 'Sistema'}</div>
                 </div>
@@ -42,16 +42,35 @@ const Layout: React.FC = () => {
                 {/* Navigation */}
                 <nav className="flex-1 overflow-y-auto py-2">
                     <NavItem to="/" icon={LayoutDashboard} label="Inicio" onClick={() => setIsSidebarOpen(false)} />
-                    <NavItem to="/clients" icon={Users} label="Clientes" onClick={() => setIsSidebarOpen(false)} />
-                    <NavItem to="/products" icon={Package} label="Artículos" onClick={() => setIsSidebarOpen(false)} />
+                    
+                    {can('clients_view') && (
+                        <NavItem to="/clients" icon={Users} label="Clientes" onClick={() => setIsSidebarOpen(false)} />
+                    )}
+                    
+                    {can('products_view') && (
+                        <NavItem to="/products" icon={Package} label="Artículos" onClick={() => setIsSidebarOpen(false)} />
+                    )}
                     
                     {/* Collapsible Section for Facturación */}
-                    <DropdownNav icon={FileText} label="Facturación" basePath="/invoices" setIsSidebarOpen={setIsSidebarOpen}>
-                        <SubNavItem to="/invoices" label="Facturas" />
-                        <SubNavItem to="/invoices?tab=order" label="Pedidos" />
-                        <SubNavItem to="/invoices?tab=credit_note" label="Notas de Crédito" />
-                        <SubNavItem to="/invoices?tab=debit_note" label="Notas de Débito" />
-                    </DropdownNav>
+                    {can('invoices_view') && (
+                        <DropdownNav icon={FileText} label="Facturación" basePath="/invoices" setIsSidebarOpen={setIsSidebarOpen}>
+                            <SubNavItem to="/invoices?tab=order" label="Pedidos" />
+                            <SubNavItem to="/invoices?tab=invoice" label="Facturas" />
+                            <SubNavItem to="/invoices?tab=credit_note" label="Notas de Crédito" />
+                            <SubNavItem to="/invoices?tab=debit_note" label="Notas de Débito" />
+                        </DropdownNav>
+                    )}
+
+
+                    <NavItem to="/payments" icon={CreditCardIcon} label="Pagos y Cobros" onClick={() => setIsSidebarOpen(false)} />
+
+                    {can('users_manage') && (
+                        <NavItem to="/users" icon={ShieldCheck} label="Seguridad" onClick={() => setIsSidebarOpen(false)} />
+                    )}
+
+                    {can('reports_view') && (
+                        <NavItem to="/reports" icon={BarChart3} label="Reportes" onClick={() => setIsSidebarOpen(false)} />
+                    )}
                 </nav>
 
                 <div className="p-4 bg-[#23303d] text-center">

@@ -1,10 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-interface User {
-    id: string;
-    username: string;
-    role: string;
-}
+import type { User } from '../types';
 
 interface AuthContextType {
     user: User | null;
@@ -12,6 +7,7 @@ interface AuthContextType {
     login: (token: string, user: User) => void;
     logout: () => void;
     isAuthenticated: boolean;
+    can: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,7 +27,6 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Al cargar la app, revisamos si hay una sesión guardada temporalmente
         const storedToken = localStorage.getItem('factura_token');
         const storedUser = localStorage.getItem('factura_user');
 
@@ -56,12 +51,25 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         setUser(null);
     };
 
+    const can = (permission: string) => {
+        if (!user) return false;
+        if (user.role === 'admin' || user.permissions.includes('all')) return true;
+        return user.permissions.includes(permission);
+    };
+
     if (loading) {
-        return <div className="min-h-screen flex items-center justify-center bg-background">Cargando sesión...</div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#f3f3f4]">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-[#1ab394] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-[#676a6c] font-bold">Iniciando Sistema Seguro...</p>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+        <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token, can }}>
             {children}
         </AuthContext.Provider>
     );

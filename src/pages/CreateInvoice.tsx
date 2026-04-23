@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { Plus, Trash2, ArrowLeft, FileText, CheckCircle2, User, Search, MapPin, Hash, Package } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Plus, Trash2, ArrowLeft, FileText, CheckCircle2, User, Search, MapPin, Hash, Package, ShieldAlert } from 'lucide-react';
 import type { InvoiceItem, Client, Product } from '../types';
 
 // ==========================================
@@ -96,28 +98,107 @@ function SearchableSelect<T extends { id: string }>(props: SearchableSelectProps
 const CreateInvoice: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { clients, products, addInvoice } = useStore();
+    const { clients, products, invoices, addInvoice } = useStore();
+    const { can } = useAuth();
 
     const [clientId, setClientId] = useState('');
     const [selectedProductId, setSelectedProductId] = useState('');
     const [items, setItems] = useState<InvoiceItem[]>([]);
     const [notes, setNotes] = useState('');
     const [status, setStatus] = useState<'paid' | 'pending'>('pending');
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     
-    const initialType = (searchParams.get('type') || 'invoice') as 'order' | 'invoice' | 'credit_note' | 'debit_note';
-    const [documentType] = useState<'order' | 'invoice' | 'credit_note' | 'debit_note'>(initialType);
+    // Bloquear scroll al mostrar confirmación
+    useEffect(() => {
+        if (showConfirm) {
+            document.body.style.overflow = 'hidden';
+            // Buscar el contenedor scrollable de Layout y bloquearlo también
+            const scrollContainer = document.querySelector('.overflow-y-auto');
+            if (scrollContainer) {
+                scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                (scrollContainer as HTMLElement).style.overflow = 'hidden';
+            }
+        } else {
+            document.body.style.overflow = '';
+            const scrollContainer = document.querySelector('.overflow-y-auto');
+            if (scrollContainer) (scrollContainer as HTMLElement).style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+            const scrollContainer = document.querySelector('.overflow-y-auto');
+            if (scrollContainer) (scrollContainer as HTMLElement).style.overflow = '';
+        };
+    }, [showConfirm]);
+    
+    const documentType = (searchParams.get('type') || 'invoice') as 'order' | 'invoice' | 'credit_note' | 'debit_note';
+    
+    // Verificación de permisos inmediata
+    const permissionMap = {
+        'order': 'orders_create',
+        'invoice': 'invoices_create',
+        'credit_note': 'credit_notes_create',
+        'debit_note': 'invoices_create'
+    };
+
+    const hasPermission = can(permissionMap[documentType] || 'invoices_create');
+
+    const fromId = searchParams.get('fromId');
+    const isPrepopulated = useRef(false);
+
+    if (!hasPermission) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-white rounded-3xl shadow-sm border border-gray-100">
+                <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-6">
+                    <ShieldAlert size={40} />
+                </div>
+                <h1 className="text-2xl font-black text-gray-800 mb-2">Acceso Restringido</h1>
+                <p className="text-gray-500 max-w-md">No tienes los privilegios necesarios para emitir este tipo de documento fiscal.</p>
+                <button onClick={() => navigate('/invoices')} className="mt-6 px-6 py-2 bg-gray-100 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition-all">Volver</button>
+            </div>
+        );
+    }
+
+    // Pre-poblar si viene de otro documento
+    useEffect(() => {
+        if (fromId && invoices.length > 0 && !isPrepopulated.current) {
+            const parent = invoices.find(inv => inv.id === fromId);
+            if (parent) {
+                setClientId(parent.clientId);
+                // Generar nuevos IDs únicos para los ítems al convertir para evitar duplicidad en la DB
+                const newItems = parent.items.map(item => ({
+                    ...item,
+                    id: `${Date.now()}-${Math.floor(Math.random() * 10000)}-${Math.random().toString(36).substr(2, 5)}`
+                }));
+                setItems(newItems);
+                setNotes(`Generado desde ${parent.type === 'order' ? 'Pedido' : 'Factura'} #${parent.id}. ${parent.notes || ''}`);
+                if (documentType === 'credit_note') {
+                    setStatus('paid');
+                }
+                isPrepopulated.current = true;
+            }
+        }
+    }, [fromId, invoices, documentType]);
 
     const activeClient = useMemo(() => clients.find(c => c.id === clientId), [clientId, clients]);
     const selectedProduct = useMemo(() => products.find(p => p.id === selectedProductId), [selectedProductId, products]);
 
+    // Calcular Balance de Crédito Actual del Cliente
+    const clientBalance = useMemo(() => {
+        if (!clientId) return 0;
+        return invoices
+            .filter(inv => inv.clientId === clientId && inv.status === 'pending' && (inv.type === 'invoice' || inv.type === 'debit_note'))
+            .reduce((sum, inv) => sum + inv.total, 0);
+    }, [clientId, invoices]);
+
+    const creditRemaining = activeClient?.creditLimit ? activeClient.creditLimit - clientBalance : 0;
+    const exceedsCredit = status === 'pending' && activeClient?.hasCreditEnabled && activeClient?.creditLimit && (total + clientBalance > activeClient.creditLimit);
+    const creditDisabled = status === 'pending' && !activeClient?.hasCreditEnabled && documentType !== 'order';
+
     const handleAddItem = () => {
         if (!selectedProduct) return;
 
-        let maxId = 0;
-        items.forEach(item => {
-            if (/^\d+$/.test(item.id)) maxId = Math.max(maxId, parseInt(item.id, 10));
-        });
-        const newId = (maxId + 1).toString();
+        const newId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
         const newItem: InvoiceItem = {
             id: newId,
@@ -155,23 +236,52 @@ const CreateInvoice: React.FC = () => {
     const tax = subtotal * 0.18; // 18% ITBIS
     const total = subtotal + tax;
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleConfirmSave = () => {
         if (!clientId || items.length === 0 || !activeClient) return;
+        
+        if (creditDisabled) {
+            alert('Este cliente no tiene el crédito habilitado. Por favor cambie la condición a "Al Contado".');
+            return;
+        }
 
-        addInvoice({
-            type: documentType,
-            clientId,
-            clientName: activeClient.name,
-            items,
-            subtotal,
-            tax,
-            total,
-            status,
-            notes
-        });
+        if (exceedsCredit) {
+            alert(`Límite de crédito excedido. \nBalance actual: RD$ ${clientBalance.toLocaleString()} \nLímite: RD$ ${activeClient.creditLimit?.toLocaleString()} \nFaltante: RD$ ${(total + clientBalance - activeClient.creditLimit!).toLocaleString()}`);
+            return;
+        }
 
-        navigate('/invoices');
+        setShowConfirm(true);
+    };
+
+    const handleSubmit = async () => {
+        if (!clientId || items.length === 0 || !activeClient) return;
+        setIsSaving(true);
+
+        try {
+            const parentInvoice = fromId ? invoices.find(inv => inv.id === fromId) : null;
+            const rootId = parentInvoice ? (parentInvoice.rootId || parentInvoice.id) : undefined;
+
+            await addInvoice({
+                type: documentType,
+                clientId,
+                clientName: activeClient.name,
+                items,
+                subtotal,
+                tax,
+                total,
+                status,
+                notes,
+                parentId: fromId || undefined,
+                rootId: rootId
+            });
+
+            navigate('/invoices');
+        } catch (error) {
+            console.error("Error al guardar:", error);
+            alert("Hubo un error al guardar el documento. Por favor intente de nuevo.");
+        } finally {
+            setIsSaving(false);
+            setShowConfirm(null);
+        }
     };
 
     const docTypeLabel = 
@@ -248,18 +358,30 @@ const CreateInvoice: React.FC = () => {
 
                     {/* Ficha Rápida del Cliente Seleccionado */}
                     {activeClient && (
-                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-wrap gap-x-8 gap-y-2 mt-4 text-sm animate-in fade-in">
+                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 flex flex-wrap gap-x-8 gap-y-4 mt-4 text-sm animate-in fade-in">
                             <div className="flex flex-col">
                                 <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Identificación</span>
                                 <span className="font-medium text-gray-700">{activeClient.taxId || 'N/A'}</span>
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Email</span>
-                                <span className="font-medium text-gray-700">{activeClient.email || 'N/A'}</span>
+                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Condición DGII</span>
+                                <span className="font-bold text-[#1ab394] bg-[#1ab394]/10 px-2 py-0.5 rounded text-[10px] w-fit mt-1">
+                                    {activeClient.taxCondition === 'B01' ? 'Crédito Fiscal (B01)' : 
+                                     activeClient.taxCondition === 'B14' ? 'Régimen Especial (B14)' :
+                                     activeClient.taxCondition === 'B15' ? 'Gubernamental (B15)' : 'Consumo Final (B02)'}
+                                </span>
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Teléfono</span>
-                                <span className="font-medium text-gray-700">{activeClient.phone || 'N/A'}</span>
+                                <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Crédito Disponible</span>
+                                <div className="flex items-center gap-2 mt-1">
+                                    {!activeClient.hasCreditEnabled ? (
+                                        <span className="text-rose-500 font-bold text-xs bg-rose-50 px-2 py-0.5 rounded border border-rose-100">DESHABILITADO</span>
+                                    ) : (
+                                        <span className={`font-bold ${creditRemaining < total ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                            RD$ {creditRemaining.toLocaleString()} / {activeClient.creditLimit?.toLocaleString()}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -443,20 +565,62 @@ const CreateInvoice: React.FC = () => {
                         </div>
 
                         <button
-                            onClick={handleSubmit}
-                            disabled={!clientId || items.length === 0}
+                            onClick={handleConfirmSave}
+                            disabled={!clientId || items.length === 0 || isSaving}
                             className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-bold text-lg text-white shadow-xl transition-all duration-300 ${
-                                !clientId || items.length === 0
+                                !clientId || items.length === 0 || isSaving
                                     ? 'bg-gray-300 cursor-not-allowed shadow-none'
                                     : 'bg-[#2f4050] hover:bg-[#1f2b36] hover:shadow-[#2f4050]/40 translate-y-[-2px]'
                             }`}
                         >
-                            <FileText size={20} />
-                            Guardar y Procesar
+                            {isSaving ? (
+                                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                                <FileText size={20} />
+                            )}
+                            {isSaving ? 'Procesando...' : 'Guardar y Procesar'}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Modal de Confirmación mediante Portal */}
+            {showConfirm && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#2f4050]/80 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
+                        <div className="p-8 text-center">
+                            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <CheckCircle2 size={40} />
+                            </div>
+                            <h3 className="text-2xl font-black text-gray-800 mb-2">¿Confirmar Emisión?</h3>
+                            <p className="text-gray-500 mb-6">
+                                ¿Está seguro que desea generar este {docTypeLabel}? 
+                                {documentType === 'invoice' && (
+                                    <span className="block mt-2 p-3 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl border border-rose-100">
+                                        ADVERTENCIA: Una factura emitida afecta el inventario y no podrá ser eliminada ni modificada posteriormente.
+                                    </span>
+                                )}
+                            </p>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => setShowConfirm(false)}
+                                    className="px-6 py-3.5 bg-gray-100 text-gray-600 font-bold rounded-2xl hover:bg-gray-200 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleSubmit}
+                                    className="px-6 py-3.5 bg-[#1ab394] text-white font-bold rounded-2xl hover:bg-[#159a7f] transition-all shadow-lg shadow-[#1ab394]/20"
+                                >
+                                    Sí, Generar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.getElementById('modal-root')!
+            )}
 
         </div>
     );

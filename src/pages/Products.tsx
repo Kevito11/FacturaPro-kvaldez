@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { useAuth } from '../context/AuthContext';
 import { Edit2, Trash2, Plus, Search, Package, ArrowLeft, Save, Tag, BarChart3, Database } from 'lucide-react';
 import type { Product } from '../types';
 
 const Products: React.FC = () => {
     const { products, addProduct, updateProduct, deleteProduct } = useStore();
+    const { can } = useAuth();
 
     // View State
     const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
@@ -102,14 +104,16 @@ const Products: React.FC = () => {
                                 </p>
                             </div>
                             
-                            <button 
-                                onClick={() => handleOpenForm()} 
-                                className="group relative inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white text-[#2f4050] font-bold rounded-xl overflow-hidden shadow-xl hover:shadow-white/20 transition-all hover:scale-105 duration-300"
-                            >
-                                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                                <Plus size={20} className="text-[#1ab394]" />
-                                Nuevo Artículo
-                            </button>
+                            {can('products_manage') && (
+                                <button 
+                                    onClick={() => handleOpenForm()} 
+                                    className="group relative inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white text-[#2f4050] font-bold rounded-xl overflow-hidden shadow-xl hover:shadow-white/20 transition-all hover:scale-105 duration-300"
+                                >
+                                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                                    <Plus size={20} className="text-[#1ab394]" />
+                                    Nuevo Artículo
+                                </button>
+                            )}
                         </div>
                         
                         {/* Decorative background vectors */}
@@ -204,20 +208,24 @@ const Products: React.FC = () => {
                                                 </td>
                                                 <td className="py-4 px-6 text-right">
                                                     <div className="flex gap-2 justify-end">
-                                                        <button
-                                                            onClick={() => handleOpenForm(product)}
-                                                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
-                                                            title="Editar"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(product.id)}
-                                                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
-                                                            title="Eliminar"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {can('products_manage') && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleOpenForm(product)}
+                                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                                                                    title="Editar"
+                                                                >
+                                                                    <Edit2 size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDelete(product.id)}
+                                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
+                                                                    title="Eliminar"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

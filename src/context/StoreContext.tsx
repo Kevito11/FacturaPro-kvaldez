@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import type { Client, Product, Invoice, AuditLog } from '../types';
+import { useAuth } from './AuthContext';
+import type { Client, Product, Invoice, AuditLog, User, Payment } from '../types';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -18,6 +19,15 @@ interface StoreState {
     updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
     deleteProduct: (id: string) => Promise<void>;
     addInvoice: (invoice: Omit<Invoice, 'id' | 'date'>) => Promise<void>;
+    updateInvoiceStatus: (id: string, status: Invoice['status']) => Promise<void>;
+    // Payments
+    payments: Payment[];
+    addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
+    // User Management (Admin only)
+    users: User[];
+    addUser: (user: Omit<User, 'id' | 'createdAt'> & { password?: string }) => Promise<void>;
+    updateUser: (id: string, user: Partial<User> & { password?: string }) => Promise<void>;
+    deleteUser: (id: string) => Promise<void>;
 }
 
 const StoreContext = createContext<StoreState | undefined>(undefined);
@@ -32,10 +42,13 @@ export const useStore = () => {
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user: currentUser } = useAuth();
     const [clients, setClients] = useState<Client[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [payments, setPayments] = useState<Payment[]>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -43,17 +56,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsLoading(true);
         setError(null);
         try {
-            const [cRes, pRes, iRes, aRes] = await Promise.all([
+            const [cRes, pRes, iRes, payRes, aRes, uRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/clients`),
                 fetch(`${API_BASE_URL}/products`),
                 fetch(`${API_BASE_URL}/invoices`),
-                fetch(`${API_BASE_URL}/auditLogs`)
+                fetch(`${API_BASE_URL}/payments`),
+                fetch(`${API_BASE_URL}/auditLogs`),
+                fetch(`${API_BASE_URL}/users`)
             ]);
 
-            if (cRes.ok) setClients(await cRes.json());
-            if (pRes.ok) setProducts(await pRes.json());
-            if (iRes.ok) setInvoices(await iRes.json());
-            if (aRes.ok) setAuditLogs(await aRes.json());
+            if (cRes.ok) setClients(await cRes.json().catch(() => []));
+            if (pRes.ok) setProducts(await pRes.json().catch(() => []));
+            if (iRes.ok) setInvoices(await iRes.json().catch(() => []));
+            if (payRes.ok) setPayments(await payRes.json().catch(() => []));
+            if (aRes.ok) setAuditLogs(await aRes.json().catch(() => []));
+            if (uRes.ok) setUsers(await uRes.json().catch(() => []));
         } catch (err: unknown) {
             console.error('Error fetching data from API:', err);
             setError('Error conectando a la API. Asegurate de iniciar el servidor Node.js.');
@@ -110,7 +127,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
             if (res.ok) {
                 setClients(prev => [...prev, newClient]);
-                addAuditLog({ action: 'create', entity: 'client', details: `Created client: ${newClient.name}`, user: 'Admin' });
+                addAuditLog({ action: 'create', entity: 'client', details: `Created client: ${newClient.name}`, user: currentUser?.username || 'System' });
             }
         } catch (err) {
             console.error('API Error', err);
@@ -169,7 +186,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
             if (res.ok) {
                 setProducts(prev => [...prev, newProduct]);
-                addAuditLog({ action: 'create', entity: 'product', details: `Created product: ${newProduct.name}`, user: 'Admin' });
+                addAuditLog({ action: 'create', entity: 'product', details: `Created product: ${newProduct.name}`, user: currentUser?.username || 'System' });
             }
         } catch (err) {
             console.error('API Error', err);
@@ -225,13 +242,135 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             });
             if (res.ok) {
                 setInvoices(prev => [newInvoice, ...prev]);
-                addAuditLog({ action: 'create', entity: 'invoice', details: `Created invoice for: ${newInvoice.clientName}`, user: 'Admin' });
-                // Refresh products stock
+                addAuditLog({ action: 'create', entity: 'invoice', details: `Created ${newInvoice.type} #${newInvoice.id} for: ${newInvoice.clientName}`, user: 'System' });
+                
+                // Actualización Automática de Estados de Origen
+                if (newInvoice.parentId) {
+                    if (newInvoice.type === 'invoice') {
+                        // Si es factura desde pedido
+                        await updateInvoiceStatus(newInvoice.parentId, 'invoiced');
+                    } else if (newInvoice.type === 'credit_note') {
+                        // Si es nota de crédito desde factura
+                        // Simplificamos a devuelto total por ahora, o podrías comparar totales
+                        await updateInvoiceStatus(newInvoice.parentId, 'returned_total');
+                    }
+                }
+
+                refreshData();
+            } else {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Error al crear el documento');
+            }
+        } catch (err) {
+            console.error('API Error', err);
+            throw err;
+        }
+    };
+
+    const updateInvoiceStatus = async (id: string, status: Invoice['status']) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/invoices/${id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            if (res.ok) {
+                setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status } : inv));
+                addAuditLog({ action: 'update', entity: 'invoice', details: `Updated status of document ${id} to ${status}`, user: 'System' });
+            } else {
+                throw new Error('Error al actualizar el estado');
+            }
+        } catch (err) {
+            console.error('API Error', err);
+            throw err;
+        }
+    };
+
+    const addUser = async (userData: Omit<User, 'id' | 'createdAt'> & { password?: string }) => {
+        const newId = Math.random().toString(36).substr(2, 9);
+        const newUser = { ...userData, id: newId, createdAt: new Date().toISOString() };
+        try {
+            const res = await fetch(`${API_BASE_URL}/users`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newUser)
+            });
+            if (res.ok) {
+                setUsers(prev => [...prev, newUser as User]);
+                addAuditLog({ action: 'create', entity: 'user', details: `Created user: ${userData.username}`, user: currentUser?.username || 'Admin' });
+            }
+        } catch (err) {
+            console.error('API Error', err);
+        }
+    };
+
+    const updateUser = async (id: string, data: Partial<User> & { password?: string }) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u) as User[]);
+            }
+        } catch (err) {
+            console.error('API Error', err);
+        }
+    };
+
+    const deleteUser = async (id: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setUsers(prev => prev.filter(u => u.id !== id));
+            }
+        } catch (err) {
+            console.error('API Error', err);
+        }
+    };
+
+    const addPayment = async (paymentData: Omit<Payment, 'id'>) => {
+        const newId = Math.random().toString(36).substr(2, 9);
+        const newPayment: Payment = { ...paymentData, id: newId };
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newPayment)
+            });
+
+            if (res.ok) {
+                setPayments(prev => [newPayment, ...prev]);
+                addAuditLog({ action: 'create', entity: 'payment', details: `Payment of RD$ ${newPayment.amount} from ${newPayment.clientName}`, user: currentUser?.username || 'System' });
+
+                // 1. Actualizar Facturas a 'paid' (Pagadas)
+                if (newPayment.invoiceIds && newPayment.invoiceIds.length > 0) {
+                    for (const invId of newPayment.invoiceIds) {
+                        await updateInvoiceStatus(invId, 'paid');
+                    }
+                }
+
+                // 2. Gestionar Saldo a Favor / Liquidación de Deuda
+                // Calculamos cuánto del pago sobró después de liquidar facturas específicas
+                const invoicesTotal = invoices
+                    .filter(inv => newPayment.invoiceIds?.includes(inv.id))
+                    .reduce((sum, inv) => sum + inv.total, 0);
+                
+                const remainder = newPayment.amount - invoicesTotal;
+                
+                // Actualizar el creditBalance del cliente
+                const client = clients.find(c => c.id === newPayment.clientId);
+                if (client) {
+                    const newBalance = (client.creditBalance || 0) + remainder;
+                    await updateClient(client.id, { creditBalance: newBalance });
+                }
+
                 refreshData();
             }
         } catch (err) {
             console.error('API Error', err);
-            alert('Error creando factura.');
         }
     };
 
@@ -250,7 +389,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             addProduct,
             updateProduct,
             deleteProduct,
-            addInvoice
+            addInvoice,
+            updateInvoiceStatus,
+            payments,
+            addPayment,
+            users,
+            addUser,
+            updateUser,
+            deleteUser
         }}>
             {children}
         </StoreContext.Provider>

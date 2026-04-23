@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { useAuth } from '../context/AuthContext';
 import { Edit2, Trash2, Plus, Search, Users, ArrowLeft, Save, MapPin, Briefcase, CreditCard } from 'lucide-react';
 import type { Client } from '../types';
 
 const Clients: React.FC = () => {
     const { clients, addClient, updateClient, deleteClient } = useStore();
+    const { can } = useAuth();
 
     // View State
     const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
@@ -24,7 +26,7 @@ const Clients: React.FC = () => {
         } else {
             setEditingClient(null);
             setFormData({
-                name: '', email: '', phone: '', address: '', taxId: '', city: '', contactPerson: '', creditLimit: 0
+                name: '', email: '', phone: '', address: '', taxId: '', city: '', contactPerson: '', creditLimit: 0, hasCreditEnabled: false, taxCondition: 'B02'
             });
         }
         setViewMode('form');
@@ -36,11 +38,12 @@ const Clients: React.FC = () => {
         setFormData({});
     };
 
-    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
+        const checked = (e.target as HTMLInputElement).checked;
         setFormData(prev => ({ 
             ...prev, 
-            [name]: type === 'number' ? Number(value) : value 
+            [name]: type === 'checkbox' ? checked : (type === 'number' ? Number(value) : value) 
         }));
     };
 
@@ -58,7 +61,9 @@ const Clients: React.FC = () => {
             taxId: formData.taxId || '',
             city: formData.city || '',
             contactPerson: formData.contactPerson || '',
-            creditLimit: formData.creditLimit || 0
+            creditLimit: formData.creditLimit || 0,
+            hasCreditEnabled: formData.hasCreditEnabled || false,
+            taxCondition: formData.taxCondition || 'B02'
         };
 
         if (editingClient) {
@@ -104,14 +109,16 @@ const Clients: React.FC = () => {
                                 </p>
                             </div>
                             
-                            <button 
-                                onClick={() => handleOpenForm()} 
-                                className="group relative inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white text-[#2f4050] font-bold rounded-xl overflow-hidden shadow-xl hover:shadow-white/20 transition-all hover:scale-105 duration-300"
-                            >
-                                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                                <Plus size={20} className="text-[#1ab394]" />
-                                Nuevo Cliente
-                            </button>
+                            {can('clients_manage') && (
+                                <button 
+                                    onClick={() => handleOpenForm()} 
+                                    className="group relative inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-white text-[#2f4050] font-bold rounded-xl overflow-hidden shadow-xl hover:shadow-white/20 transition-all hover:scale-105 duration-300"
+                                >
+                                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                                    <Plus size={20} className="text-[#1ab394]" />
+                                    Nuevo Cliente
+                                </button>
+                            )}
                         </div>
                         
                         {/* Decorative background vectors */}
@@ -196,20 +203,24 @@ const Clients: React.FC = () => {
                                                 </td>
                                                 <td className="py-4 px-6 text-right">
                                                     <div className="flex gap-2 justify-end">
-                                                        <button
-                                                            onClick={() => handleOpenForm(client)}
-                                                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
-                                                            title="Editar"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(client.id)}
-                                                            className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
-                                                            title="Eliminar"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {can('clients_manage') && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleOpenForm(client)}
+                                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all"
+                                                                    title="Editar"
+                                                                >
+                                                                    <Edit2 size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDelete(client.id)}
+                                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all"
+                                                                    title="Eliminar"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -311,12 +322,33 @@ const Clients: React.FC = () => {
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Límite de Crédito Permitido (RD$) <span className="text-gray-400 font-normal lowercase">(opcional)</span></label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
-                                        <input type="number" min="0" name="creditLimit" value={formData.creditLimit || ''} onChange={handleFormChange} className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl pl-8 pr-4 py-3 outline-none focus:ring-2 focus:ring-[#1ab394]/30 focus:border-[#1ab394] transition-all font-medium" placeholder="0.00" />
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Clasificación DGII (Comprobante Sugerido)</label>
+                                    <select name="taxCondition" value={formData.taxCondition || 'B02'} onChange={handleFormChange} className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#1ab394]/30 focus:border-[#1ab394] transition-all font-medium">
+                                        <option value="B01">Crédito Fiscal (B01) - Empresas/Negocios</option>
+                                        <option value="B02">Consumo Final (B02) - Personas Físicas</option>
+                                        <option value="B14">Regímenes Especiales (B14) - Zonas Francas/Embajadas</option>
+                                        <option value="B15">Gubernamental (B15) - Instituciones Públicas</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Configuración de Crédito</label>
+                                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="hasCreditEnabled" checked={formData.hasCreditEnabled || false} onChange={handleFormChange} className="sr-only peer" />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1ab394]"></div>
+                                        </label>
+                                        <span className="text-sm font-bold text-gray-700">Habilitar Ventas a Crédito</span>
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-2">Déjelo en cero (0) si no aplica límite de crédito.</p>
+                                    
+                                    {formData.hasCreditEnabled && (
+                                        <div className="animate-in slide-in-from-top-2 duration-300">
+                                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Límite de Crédito RD$</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                                                <input type="number" min="0" name="creditLimit" value={formData.creditLimit || ''} onChange={handleFormChange} className="w-full bg-white border border-gray-200 text-gray-800 rounded-xl pl-8 pr-4 py-3 outline-none focus:ring-2 focus:ring-[#1ab394]/30 focus:border-[#1ab394] transition-all font-bold" placeholder="0.00" />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
