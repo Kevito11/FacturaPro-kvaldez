@@ -9,9 +9,7 @@ import {
     CheckCircle2, 
     AlertCircle, 
     DollarSign,
-    MoreVertical,
     FileText,
-    ArrowUpRight,
     ArrowDownLeft,
     Clock,
     X,
@@ -20,7 +18,7 @@ import {
 import type { Payment } from '../types';
 
 const Payments: React.FC = () => {
-    const { payments, clients, invoices, addPayment, isLoading } = useStore();
+    const { payments, clients, invoices, addPayment } = useStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
 

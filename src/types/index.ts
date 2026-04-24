@@ -81,7 +81,7 @@ export interface User {
 export interface AuditLog {
     id: string;
     action: 'create' | 'update' | 'delete' | 'login' | 'print';
-    entity: 'client' | 'product' | 'invoice' | 'system' | 'user';
+    entity: 'client' | 'product' | 'invoice' | 'system' | 'user' | 'payment';
     details: string;
     timestamp: string;
     user: string;

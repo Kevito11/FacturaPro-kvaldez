@@ -21,7 +21,7 @@ const PERMISSIONS_LIST = [
 
 const Users: React.FC = () => {
     const { users, addUser, updateUser, deleteUser } = useStore();
-    const { user: currentUser, can } = useAuth();
+    const { can } = useAuth();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);

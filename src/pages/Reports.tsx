@@ -1,18 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+
 import { useStore } from '../context/StoreContext';
 import { useAuth } from '../context/AuthContext';
 import { 
-    TrendingUp, 
-    Calendar, 
     Download, 
-    Filter, 
     AlertTriangle, 
-    CheckCircle2, 
-    ArrowUpRight, 
-    Users,
     ChevronRight,
     CreditCard,
     FileText,

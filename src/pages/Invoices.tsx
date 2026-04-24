@@ -12,15 +12,13 @@ const Invoices: React.FC = () => {
     const { invoices, clients, updateInvoiceStatus } = useStore();
     const { can } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams] = useSearchParams();
     
     // Read from URL, fallback to invoice
     const urlTab = searchParams.get('tab') as DocumentType | null;
     const activeTab: DocumentType = urlTab || 'invoice';
 
-    const setActiveTab = (type: DocumentType) => {
-        setSearchParams({ tab: type });
-    };
+
 
     const filteredInvoices = invoices.filter(invoice => {
         const matchesTab = (invoice.type || 'invoice') === activeTab;

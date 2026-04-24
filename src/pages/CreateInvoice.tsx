@@ -192,6 +192,10 @@ const CreateInvoice: React.FC = () => {
     }, [clientId, invoices]);
 
     const creditRemaining = activeClient?.creditLimit ? activeClient.creditLimit - clientBalance : 0;
+    const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.total, 0), [items]);
+    const tax = useMemo(() => subtotal * 0.18, [subtotal]);
+    const total = useMemo(() => subtotal + tax, [subtotal, tax]);
+
     const exceedsCredit = status === 'pending' && activeClient?.hasCreditEnabled && activeClient?.creditLimit && (total + clientBalance > activeClient.creditLimit);
     const creditDisabled = status === 'pending' && !activeClient?.hasCreditEnabled && documentType !== 'order';
 
@@ -232,9 +236,7 @@ const CreateInvoice: React.FC = () => {
         setItems(items.filter(item => item.id !== id));
     };
 
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const tax = subtotal * 0.18; // 18% ITBIS
-    const total = subtotal + tax;
+
 
     const handleConfirmSave = () => {
         if (!clientId || items.length === 0 || !activeClient) return;
@@ -280,7 +282,7 @@ const CreateInvoice: React.FC = () => {
             alert("Hubo un error al guardar el documento. Por favor intente de nuevo.");
         } finally {
             setIsSaving(false);
-            setShowConfirm(null);
+            setShowConfirm(false);
         }
     };
 
